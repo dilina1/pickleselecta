@@ -22,8 +22,20 @@ type Body = {
 
 const LIMIT = 30;
 
+export async function GET(req: NextRequest) {
+  const q = req.nextUrl.searchParams;
+  return run({
+    seedIsrc: q.get("seedIsrc") ?? undefined,
+    seedUuid: q.get("seedUuid") ?? undefined,
+    maxGap: q.get("maxGap") ? Number(q.get("maxGap")) : undefined,
+  });
+}
+
 export async function POST(req: NextRequest) {
-  const body: Body = await req.json();
+  return run(await req.json());
+}
+
+async function run(body: Body) {
   const maxGap = Math.min(Math.max(body.maxGap ?? 6, 1), 15);
 
   try {
