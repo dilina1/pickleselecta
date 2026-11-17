@@ -7,12 +7,12 @@ type Hit = { isrc: string; title: string; artists: string; cover: string | null;
 type SetTrack = Hit & { uuid: string; bpm: number; camelot: string; key: string };
 type Candidate = {
   uuid: string; isrc: string; title: string; artists: string;
-  bpm: number; camelot: string; key: string; energy: number;
+  bpm: number; camelot: string; key: string; energy: number; popularity: number;
   compat: string | null; bpmGap: number; score: number;
   cover: string | null; preview: string | null;
 };
 type SeedInfo = { uuid: string; bpm: number; camelot: string; key: string; energy: number };
-type Sort = "match" | "bpm" | "energy";
+type Sort = "match" | "bpm" | "energy" | "popular";
 
 const BADGE: Record<string, string> = {
   same: "bg-emerald-700", adjacent: "bg-sky-700", relative: "bg-violet-700",
@@ -83,8 +83,8 @@ export default function SetBuilder() {
     setBusy(false);
   }
 
-  async function load(target: { seedIsrc?: string; seedUuid?: string }, current: SetTrack[], gap: number) {
-    setBusy(true); setMsg(""); setKeyFilter(null);
+  async function load(target: { seedIsrc?: string; seedUuid?: string }, current: SetTrack[], gap: number, only?: string) {
+    setBusy(true); setMsg(""); setKeyFilter(only ?? null);
     try {
       const res = await fetch("/api/harmonic", {
         method: "POST",
@@ -93,6 +93,7 @@ export default function SetBuilder() {
           poolSeeds: current.slice(-3).map((t) => t.uuid),
           exclude: current.map((t) => t.uuid),
           maxGap: gap,
+          onlyCamelot: only,
         }),
       });
       const json = await res.json();
@@ -155,9 +156,11 @@ export default function SetBuilder() {
     navigator.clipboard?.writeText(text).then(() => setSaveMsg({ text: "Tracklist copied" }));
   }
 
-  const shown = cands
-    .filter((c) => !keyFilter || c.camelot === keyFilter)
-    .sort((a, b) => sort === "bpm" ? a.bpmGap - b.bpmGap : sort === "energy" ? b.energy - a.energy : b.score - a.score);
+  const shown = [...cands].sort((a, b) =>
+    sort === "bpm" ? a.bpmGap - b.bpmGap
+    : sort === "energy" ? b.energy - a.energy
+    : sort === "popular" ? b.popularity - a.popularity
+    : b.score - a.score);
   const last = set[set.length - 1];
 
   return (
@@ -223,7 +226,7 @@ export default function SetBuilder() {
                         const active = keyFilter === id;
                         return (
                           <button key={id} disabled={!count && !isSeed}
-                            onClick={() => setKeyFilter(active ? null : id)}
+                            onClick={() => load({ seedUuid: seed.uuid }, set, maxGap, active ? undefined : id)}
                             className={`rounded text-[11px] py-1.5 font-mono leading-tight ${
                               isSeed ? "bg-coral-500 text-black font-bold"
                               : active ? "bg-emerald-500 text-black"
@@ -239,7 +242,7 @@ export default function SetBuilder() {
                 <div className="flex items-center justify-between mt-2 text-xs text-shell-400">
                   <span>{keyFilter ? `Filtering ${keyFilter} · tap again to clear` : "Tap a key to filter"}</span>
                   <select value={sort} onChange={(e) => setSort(e.target.value as Sort)} className="bg-shell-800 border border-shell-600 rounded px-2 py-1 text-shell-100">
-                    <option value="match">Best match</option><option value="bpm">Closest BPM</option><option value="energy">Highest energy</option>
+                    <option value="match">Best match</option><option value="bpm">Closest BPM</option><option value="energy">Highest energy</option><option value="popular">Most popular</option>
                   </select>
                 </div>
               </section>

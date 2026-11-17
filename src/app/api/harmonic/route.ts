@@ -20,9 +20,11 @@ type Body = {
   poolSeeds?: string[]; // up to 3 recent set tracks to widen the pool
   exclude?: string[]; // uuids already in the set
   maxGap?: number; // BPM tolerance in %
+  onlyCamelot?: string; // return only this key slot (key strip filter)
 };
 
-const LIMIT = 30;
+const LIMIT = 30; // max rows when a single key is selected
+const PER_KEY = 6; // rows per key slot in the default mixed view
 
 // Covers, karaoke and gym-mix filler crowd out the real tracks.
 const JUNK = /(karaoke|tribute|made famous|originally performed|backing track|\bcover\b|work ?out|lullaby|8-bit|ringtone|party (music|nation)|\bdj mix\b)/i;
@@ -35,6 +37,7 @@ export async function GET(req: NextRequest) {
     seedIsrc: q.get("seedIsrc") ?? undefined,
     seedUuid: q.get("seedUuid") ?? undefined,
     maxGap: q.get("maxGap") ? Number(q.get("maxGap")) : undefined,
+    onlyCamelot: q.get("onlyCamelot") ?? undefined,
   });
 }
 
@@ -115,6 +118,7 @@ async function run(body: Body) {
           camelot: camelotLabel(camelot),
           key: keyName(f.key, f.mode),
           energy: Math.round(f.energy * 100),
+          popularity: c.popularity,
           compat,
           bpmGap: Number(gap.toFixed(1)),
           score: scoreCandidate(compat, gap, maxGap) + c.popularity / 20,
@@ -126,7 +130,10 @@ async function run(body: Body) {
     const keyCounts: Record<string, number> = {};
     for (const c of ranked) keyCounts[c.camelot] = (keyCounts[c.camelot] ?? 0) + 1;
 
-    const top = ranked.slice(0, LIMIT);
+    const perKey: Record<string, number> = {};
+    const top = body.onlyCamelot
+      ? ranked.filter((c) => c.camelot === body.onlyCamelot).slice(0, LIMIT)
+      : ranked.filter((c) => (perKey[c.camelot] = (perKey[c.camelot] ?? 0) + 1) <= PER_KEY);
     const art = await pmap(top, 10, (c) => byIsrc(c.isrc));
     const candidates = top.map((c, i) => ({
       ...c,

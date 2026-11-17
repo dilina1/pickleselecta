@@ -74,7 +74,7 @@ export function scoreCandidate(
   maxGap = 6
 ): number {
   if (!compat || gapPercent > maxGap) return -1;
-  return COMPAT_SCORE[compat] * 10 - gapPercent;
+  return COMPAT_SCORE[compat] * 10 - gapPercent * 0.5;
 }
 
 // Inverse of toCamelot: Camelot slot -> Spotify-style key/mode.
