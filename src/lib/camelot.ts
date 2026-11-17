@@ -1,10 +1,10 @@
-// Camelot wheel helpers. Spotify-style input: key 0-11 (C=0), mode 1=major, 0=minor.
+// Camelot wheel helpers. Input: key 0-11 (C=0), mode 1=major, 0=minor.
 
 const MAJOR = [8, 3, 10, 5, 12, 7, 2, 9, 4, 11, 6, 1];
 const MINOR = [5, 12, 7, 2, 9, 4, 11, 6, 1, 8, 3, 10];
+const NAMES = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"];
 
 export type Camelot = { num: number; letter: "A" | "B" };
-
 export type Compat = "same" | "relative" | "adjacent" | "diagonal" | "boost";
 
 export function toCamelot(
@@ -23,7 +23,16 @@ export function camelotLabel(c: Camelot | null): string {
   return c ? `${c.num}${c.letter}` : "?";
 }
 
-// Distance around the 12-position wheel (0..6)
+export function keyName(
+  key: number | undefined | null,
+  mode: number | undefined | null
+): string {
+  if (key == null || key < 0 || key > 11 || (mode !== 0 && mode !== 1)) {
+    return "?";
+  }
+  return `${NAMES[key]} ${mode === 1 ? "maj" : "min"}`;
+}
+
 function wheelDistance(a: number, b: number): number {
   const d = Math.abs(a - b) % 12;
   return Math.min(d, 12 - d);

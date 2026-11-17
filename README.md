@@ -1,25 +1,35 @@
-# 💽 Selecta
+# 🥒 PickleSelecta
 
-![Vercel](https://vercelbadge.vercel.app/api/knightspore/selecta)
+Build harmonically mixed DJ sets. Pick a seed song, get tracks that mix with it (same key, ±1 on the Camelot wheel, relative major/minor, within a BPM range), add them to a set, and save it to YouTube Music.
 
-A Crate Digging Tool for DJs to get recommendations from Spotify.
+Forked from [Selecta](https://github.com/knightspore/selecta) by Ciaran, rebuilt to run without a Spotify account.
 
-![App Preview](./public/selecta.png)
+## How it works
 
-## Project Structure
+- **Search, cover art, 30s previews:** Deezer public API (no key)
+- **Key, BPM, similar tracks:** ReccoBeats (no key), matched by ISRC
+- **Save to YouTube Music:** YouTube Data API v3 via Google sign-in (only needed for saving)
 
-This is a Next 13 project, using the app router and hosted on Vercel. Currently I'm using Context to handle the recommendation state in the app, and talking to the API to make Spotify calls from the server.
+## Setup
 
-### Contributing
+Env vars (see `.env.example`):
 
-You'll need a number of auth keys to contribute to the project (as listed in `.env.example`). A [Spotify Developer Account](https://developer.spotify.com/) is required, as well as a [Vercel KV Database](https://vercel.com/docs/storage/vercel-kv).
+| Var | Purpose |
+| --- | --- |
+| `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` | Google OAuth client (Web) with the YouTube Data API v3 enabled |
+| `NEXTAUTH_SECRET` | Any long random string |
+| `NEXTAUTH_URL` | Your deployed URL |
 
-## Roadmap / Ideas
+Authorised redirect URI in Google Cloud: `<NEXTAUTH_URL>/api/auth/callback/google`
 
-- Add Soundcloud Support
-- Better Library Interaction (ie. Manage playlists from within Selecta)
-- Re-do the in-app sample player
+Saving a 20-track set costs about 3,000 of YouTube's free 10,000 daily quota units (each track needs a search and an insert).
 
-## License
+## Dev
 
-Selecta is distributed under MIT license, which means you can use and modify it however you want. If you have any ideas, improvements, etc. - please feel free to make a pull request.
+```
+yarn install
+yarn dev
+yarn test
+```
+
+MIT licensed.

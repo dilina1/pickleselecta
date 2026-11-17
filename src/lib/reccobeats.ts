@@ -1,88 +1,83 @@
-// Free key/BPM + candidate source (ReccoBeats). Spotify's /audio-features and
-// /recommendations are closed to new apps, so we use this instead.
-// Response shapes are handled defensively because the API is lightly documented.
+// ReccoBeats: free key/BPM + similar-track candidates. Looked up by ISRC, so no
+// streaming-service account is involved. Verified against the live API.
 
 const BASE = "https://api.reccobeats.com/v1";
 
-export type ReccoFeatures = {
-  spotifyId: string;
-  tempo: number;
-  key: number;
-  mode: number;
-};
-
-export type ReccoCandidate = {
-  spotifyId: string;
+export type ReccoTrack = {
+  uuid: string;
+  isrc: string;
   title: string;
   artists: string;
 };
 
-const SPOTIFY_ID = /(?:track\/|track:)([A-Za-z0-9]{22})/;
-
-function spotifyIdOf(item: any): string | null {
-  const href: string | undefined = item?.href ?? item?.spotifyUrl;
-  const m = href ? SPOTIFY_ID.exec(href) : null;
-  if (m) return m[1];
-  if (typeof item?.id === "string" && /^[A-Za-z0-9]{22}$/.test(item.id)) {
-    return item.id;
-  }
-  return null;
-}
+export type ReccoFeatures = {
+  uuid: string;
+  tempo: number;
+  key: number;
+  mode: number;
+  energy: number;
+  danceability: number;
+};
 
 async function get(path: string): Promise<any> {
   const res = await fetch(`${BASE}${path}`, {
     headers: { Accept: "application/json" },
     cache: "no-store",
   });
-  if (!res.ok) {
-    throw new Error(`ReccoBeats ${path} -> ${res.status}`);
-  }
+  if (!res.ok) throw new Error(`ReccoBeats ${res.status} for ${path.split("?")[0]}`);
   return res.json();
 }
 
-export async function getFeatures(
-  spotifyIds: string[]
-): Promise<Record<string, ReccoFeatures>> {
-  const out: Record<string, ReccoFeatures> = {};
-  // Keep batches small to stay within URL/limit constraints.
-  for (let i = 0; i < spotifyIds.length; i += 40) {
-    const batch = spotifyIds.slice(i, i + 40);
-    const data = await get(`/audio-features?ids=${batch.join(",")}`);
-    const items: any[] = data?.content ?? [];
-    items.forEach((item, idx) => {
-      // Prefer the id embedded in href; fall back to request order.
-      const sid = spotifyIdOf(item) ?? batch[idx];
-      if (!sid || typeof item?.tempo !== "number") return;
-      out[sid] = {
-        spotifyId: sid,
-        tempo: item.tempo,
-        key: typeof item.key === "number" ? item.key : -1,
-        mode: typeof item.mode === "number" ? item.mode : -1,
-      };
-    });
-  }
-  return out;
+function shapeTrack(item: any): ReccoTrack | null {
+  if (!item?.id || !item?.isrc) return null;
+  return {
+    uuid: item.id,
+    isrc: item.isrc,
+    title: item.trackTitle ?? "Unknown title",
+    artists: Array.isArray(item.artists)
+      ? item.artists.map((a: any) => a.name).join(", ")
+      : "",
+  };
 }
 
-export async function getCandidates(
-  seedSpotifyId: string,
+export async function trackByIsrc(isrc: string): Promise<ReccoTrack | null> {
+  const data = await get(`/track?ids=${encodeURIComponent(isrc)}`);
+  return shapeTrack(data?.content?.[0]);
+}
+
+export async function recommend(
+  seedUuids: string[],
   size = 100
-): Promise<ReccoCandidate[]> {
+): Promise<ReccoTrack[]> {
   const data = await get(
-    `/track/recommendation?size=${size}&seeds=${seedSpotifyId}`
+    `/track/recommendation?size=${size}&seeds=${seedUuids.join(",")}`
   );
-  const items: any[] = data?.content ?? [];
-  const out: ReccoCandidate[] = [];
-  for (const item of items) {
-    const sid = spotifyIdOf(item);
-    if (!sid) continue;
-    out.push({
-      spotifyId: sid,
-      title: item.trackTitle ?? item.name ?? "Unknown title",
-      artists: Array.isArray(item.artists)
-        ? item.artists.map((a: any) => a.name).join(", ")
-        : "",
-    });
+  return (data?.content ?? [])
+    .map(shapeTrack)
+    .filter((t: ReccoTrack | null): t is ReccoTrack => !!t);
+}
+
+export async function getFeatures(
+  uuids: string[]
+): Promise<Record<string, ReccoFeatures>> {
+  const batches: string[][] = [];
+  for (let i = 0; i < uuids.length; i += 40) batches.push(uuids.slice(i, i + 40));
+  const results = await Promise.all(
+    batches.map((b) => get(`/audio-features?ids=${b.join(",")}`))
+  );
+  const out: Record<string, ReccoFeatures> = {};
+  for (const data of results) {
+    for (const f of data?.content ?? []) {
+      if (!f?.id || typeof f.tempo !== "number") continue;
+      out[f.id] = {
+        uuid: f.id,
+        tempo: f.tempo,
+        key: typeof f.key === "number" ? f.key : -1,
+        mode: typeof f.mode === "number" ? f.mode : -1,
+        energy: typeof f.energy === "number" ? f.energy : 0,
+        danceability: typeof f.danceability === "number" ? f.danceability : 0,
+      };
+    }
   }
   return out;
 }
