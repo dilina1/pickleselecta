@@ -54,11 +54,12 @@ export const URLS = {
       return `${BASE_URL}/playlists/${id}` as Endpoint
     },
     GetAll: `${BASE_URL}/me/playlists` as Endpoint,
-    Create: ({ id }: CreatePlaylistInput) => {
-      return `${BASE_URL}/users/${id}/playlists` as Endpoint;
+    // Feb 2026 dev-mode API: /users/{id}/playlists -> /me/playlists, /tracks -> /items
+    Create: (_input: CreatePlaylistInput) => {
+      return `${BASE_URL}/me/playlists` as Endpoint;
     },
     Add: ({ id }: AddToPlaylistInput) =>
-      `${BASE_URL}/playlists/${id}/tracks` as Endpoint,
+      `${BASE_URL}/playlists/${id}/items` as Endpoint,
   },
   Search: {
     Artists: (input: Artist["name"]) => {
@@ -72,7 +73,7 @@ export const URLS = {
       const params = new URLSearchParams();
       params.append("q", input);
       params.append("type", "track");
-      params.append("limit", "3");
+      params.append("limit", "8"); // dev-mode max is 10
       return `${BASE_URL}/search?${params.toString()}` as Endpoint;
     }
   },
