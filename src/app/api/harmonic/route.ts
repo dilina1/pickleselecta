@@ -3,12 +3,14 @@ import {
   bpmGapPercent,
   camelotLabel,
   compatibility,
+  compatibleSlots,
+  fromCamelot,
   keyName,
   scoreCandidate,
   toCamelot,
 } from "@/lib/camelot";
 import { byIsrc, pmap } from "@/lib/deezer";
-import { getFeatures, recommend, trackByIsrc } from "@/lib/reccobeats";
+import { getFeatures, recommend, trackByIsrc, type ReccoTrack } from "@/lib/reccobeats";
 
 export const maxDuration = 30;
 
@@ -21,6 +23,11 @@ type Body = {
 };
 
 const LIMIT = 30;
+
+// Covers, karaoke and gym-mix filler crowd out the real tracks.
+const JUNK = /(karaoke|tribute|made famous|originally performed|backing track|\bcover\b|work ?out|lullaby|8-bit|ringtone|party (music|nation)|\bdj mix\b)/i;
+const normTitle = (t: string) =>
+  t.toLowerCase().replace(/[(\[].*?[)\]]/g, "").replace(/\s+-\s+.*$/, "").replace(/[^a-z0-9]+/g, " ").trim();
 
 export async function GET(req: NextRequest) {
   const q = req.nextUrl.searchParams;
@@ -55,11 +62,7 @@ async function run(body: Body) {
     }
 
     const pool = Array.from(new Set([seedUuid, ...(body.poolSeeds ?? [])])).slice(0, 3);
-    const [recs, seedFeat] = await Promise.all([
-      recommend(pool, 100),
-      getFeatures([seedUuid]),
-    ]);
-
+    const seedFeat = await getFeatures([seedUuid]);
     const seed = seedFeat[seedUuid];
     const seedCamelot = seed ? toCamelot(seed.key, seed.mode) : null;
     if (!seed || !seedCamelot) {
@@ -69,13 +72,31 @@ async function run(body: Body) {
       );
     }
 
+    // Base pool (same-ish key) plus one request per compatible key slot so the
+    // list has real harmonic variety, all pinned near the seed's tempo.
+    const tempo = Math.round(seed.tempo);
+    const settled = await Promise.allSettled([
+      recommend(pool, 100, { tempo }),
+      ...compatibleSlots(seedCamelot).map((slot) =>
+        recommend(pool, 40, { ...fromCamelot(slot), tempo })
+      ),
+    ]);
+    const recs: ReccoTrack[] = settled.flatMap((s) => (s.status === "fulfilled" ? s.value : []));
+    if (settled[0].status === "rejected") throw settled[0].reason;
+
     const skip = new Set([seedUuid, ...(body.exclude ?? [])]);
     const seenIsrc = new Set<string>();
-    const candidatesIn = recs.filter((r) => {
-      if (skip.has(r.uuid) || seenIsrc.has(r.isrc)) return false;
-      seenIsrc.add(r.isrc);
-      return true;
-    });
+    const seenTitle = new Set<string>();
+    const candidatesIn = recs
+      .sort((a, b) => b.popularity - a.popularity)
+      .filter((r) => {
+        const nt = normTitle(r.title);
+        if (skip.has(r.uuid) || seenIsrc.has(r.isrc) || seenTitle.has(nt)) return false;
+        if (JUNK.test(r.title) || JUNK.test(r.artists)) return false;
+        seenIsrc.add(r.isrc);
+        seenTitle.add(nt);
+        return true;
+      });
     const feats = await getFeatures(candidatesIn.map((c) => c.uuid));
 
     const ranked = candidatesIn
@@ -96,7 +117,7 @@ async function run(body: Body) {
           energy: Math.round(f.energy * 100),
           compat,
           bpmGap: Number(gap.toFixed(1)),
-          score: scoreCandidate(compat, gap, maxGap),
+          score: scoreCandidate(compat, gap, maxGap) + c.popularity / 20,
         };
       })
       .filter((c): c is NonNullable<typeof c> => !!c && c.score >= 0)

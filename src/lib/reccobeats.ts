@@ -8,6 +8,7 @@ export type ReccoTrack = {
   isrc: string;
   title: string;
   artists: string;
+  popularity: number;
 };
 
 export type ReccoFeatures = {
@@ -37,6 +38,7 @@ function shapeTrack(item: any): ReccoTrack | null {
     artists: Array.isArray(item.artists)
       ? item.artists.map((a: any) => a.name).join(", ")
       : "",
+    popularity: typeof item.popularity === "number" ? item.popularity : 0,
   };
 }
 
@@ -45,12 +47,19 @@ export async function trackByIsrc(isrc: string): Promise<ReccoTrack | null> {
   return shapeTrack(data?.content?.[0]);
 }
 
+export type RecommendTargets = { key?: number; mode?: number; tempo?: number };
+
 export async function recommend(
   seedUuids: string[],
-  size = 100
+  size = 100,
+  targets: RecommendTargets = {}
 ): Promise<ReccoTrack[]> {
+  const extra = Object.entries(targets)
+    .filter(([, v]) => v !== undefined)
+    .map(([k, v]) => `&${k}=${v}`)
+    .join("");
   const data = await get(
-    `/track/recommendation?size=${size}&seeds=${seedUuids.join(",")}`
+    `/track/recommendation?size=${size}&seeds=${seedUuids.join(",")}${extra}`
   );
   return (data?.content ?? [])
     .map(shapeTrack)

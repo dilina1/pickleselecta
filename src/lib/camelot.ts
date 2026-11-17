@@ -76,3 +76,24 @@ export function scoreCandidate(
   if (!compat || gapPercent > maxGap) return -1;
   return COMPAT_SCORE[compat] * 10 - gapPercent;
 }
+
+// Inverse of toCamelot: Camelot slot -> Spotify-style key/mode.
+export function fromCamelot(c: Camelot): { key: number; mode: number } {
+  const table = c.letter === "B" ? MAJOR : MINOR;
+  return { key: table.indexOf(c.num), mode: c.letter === "B" ? 1 : 0 };
+}
+
+const wrap = (n: number) => ((n - 1 + 12) % 12) + 1;
+
+// The slots that mix with `seed`, used to request a key-diverse candidate pool.
+export function compatibleSlots(seed: Camelot): Camelot[] {
+  const other = seed.letter === "A" ? "B" : "A";
+  return [
+    { num: wrap(seed.num + 1), letter: seed.letter },
+    { num: wrap(seed.num - 1), letter: seed.letter },
+    { num: seed.num, letter: other },
+    { num: wrap(seed.num + 1), letter: other },
+    { num: wrap(seed.num - 1), letter: other },
+    { num: wrap(seed.num + 2), letter: seed.letter },
+  ];
+}

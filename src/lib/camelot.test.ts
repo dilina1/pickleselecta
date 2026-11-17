@@ -1,5 +1,7 @@
 import {
   bpmGapPercent,
+  compatibleSlots,
+  fromCamelot,
   camelotLabel,
   compatibility,
   keyName,
@@ -50,5 +52,24 @@ describe("bpm and score", () => {
     expect(scoreCandidate("same", 2, 6)).toBeGreaterThan(
       scoreCandidate("adjacent", 0, 6)
     );
+  });
+});
+
+describe("slots", () => {
+  it("round-trips key/mode", () => {
+    for (let key = 0; key < 12; key++) {
+      for (const mode of [0, 1]) {
+        expect(fromCamelot(toCamelot(key, mode)!)).toEqual({ key, mode });
+      }
+    }
+  });
+  it("lists compatible slots for 8A", () => {
+    const labels = compatibleSlots({ num: 8, letter: "A" }).map(camelotLabel);
+    expect(labels).toEqual(["9A", "7A", "8B", "9B", "7B", "10A"]);
+  });
+  it("wraps 12A/1A", () => {
+    const labels = compatibleSlots({ num: 12, letter: "A" }).map(camelotLabel);
+    expect(labels).toContain("1A");
+    expect(labels).toContain("11A");
   });
 });
